@@ -109,7 +109,20 @@ namespace BacnetAgentDevice
             }
             String responseValue = String.Empty;
 
+            IList<BacnetReadAccessSpecification> requestBacnetObjectList = new List<BacnetReadAccessSpecification>();
+
+            //가져올 속성값(Present Value)
+            IList<BacnetPropertyReference> bacnetProperties = new List<BacnetPropertyReference>();
+            bacnetProperties.Add(new BacnetPropertyReference((uint)BacnetPropertyIds.PROP_PRESENT_VALUE, 0));
+
+            //값을 받을 변수
+            IList<BacnetReadAccessResult> resultValues = new List<BacnetReadAccessResult>();
+            Queue<String> systemIdList = new Queue<String>();
+
+            uint uDeviceId = 0;
+
             //systemList에 들어가있는 systemID 잘요리해서 타입 인스턴스 번호뽑아서 BacnetObjectID만들어서 deviceIDreadScalarValue 함수 돌리자
+            //BacnetObjectID를 만들어 BacnetReadAccessSpecification에 넣어 request 배열에 추가한다.
             foreach (String systemId in systemList)
             {
                 String[] systemIdSplit = systemId.Split('-');
@@ -117,13 +130,15 @@ namespace BacnetAgentDevice
                 String moduleId = systemIdSplit[1];
                 String sType = systemIdSplit[2];
                 String instance = systemIdSplit[3];
+                //장비별로 디바이스 따로 등록해야함
+                if (uDeviceId == 0) uDeviceId = uint.Parse(systemIdSplit[0]);           //최초 한번만 디바이스 아이디 스캔
 
                 try
                 {
                     uint uInstance = (131072 * uint.Parse(moduleId)) + uint.Parse(instance);
 
                     BacnetObjectId bacnetObjectId = new BacnetObjectId();
-                    BacnetValue bacnetValue = new BacnetValue();
+
                     switch (sType)
                     {
                         case "AI":
@@ -154,25 +169,37 @@ namespace BacnetAgentDevice
                             bacnetObjectId = new BacnetObjectId(BacnetObjectTypes.OBJECT_MULTI_STATE_VALUE, uInstance);
                             break;
                     }
-                    if (control)
-                    {
-                        bacnetValue.Value = systemList[1];
-                        if (!writeScalarValue(uint.Parse(deviceId), bacnetObjectId, bacnetValue))
-                        {
-                            Console.WriteLine("제어실패");
-                        }
-                        break;
-                    }
-                    else
-                    {
-                        if (readScalarValue(uint.Parse(deviceId), bacnetObjectId, BacnetPropertyIds.PROP_PRESENT_VALUE, out bacnetValue))
-                        {
-                            responseValue += String.Format("{0},{1},13;", systemId, bacnetValue.Value.ToString());
-                        }
-                    }
 
-                    Thread.Sleep(10);
-                }catch (Exception ex) { continue; }
+                    requestBacnetObjectList.Add(new BacnetReadAccessSpecification(bacnetObjectId, bacnetProperties));
+                    systemIdList.Enqueue(systemId);
+                }
+                catch (Exception ex) { continue; }
+            }
+
+            if (control)
+            {
+                /*bacnetValue.Value = systemList[1];
+                if (!writeScalarValue(uint.Parse(deviceId), bacnetObjectId, bacnetValue))
+                {
+                    Console.WriteLine("제어실패");
+                }
+                break;*/
+            }
+            else
+            {
+                if (readMultiScalarValue(uDeviceId, requestBacnetObjectList, out resultValues))
+                {
+                    foreach(BacnetReadAccessResult result in resultValues)
+                    {
+                        responseValue += String.Format("{0},{1},13;", systemIdList.Dequeue(), result.values[0].value.ToString());
+                    }
+                    //responseValue += String.Format("{0},{1},13;", systemId, bacnetValue.Value.ToString());
+                }
+
+                /*if (readScalarValue(uint.Parse(deviceId), bacnetObjectId, BacnetPropertyIds.PROP_PRESENT_VALUE, out bacnetValue))
+                {
+                    responseValue += String.Format("{0},{1},13;", systemId, bacnetValue.Value.ToString());
+                }*/
             }
 
             base.ToReceive(_Device, 3, responseValue, systemList.Length);
@@ -278,10 +305,11 @@ namespace BacnetAgentDevice
             return true;
         }
 
-        public bool readMultiScalarValue(uint deviceId, BacnetObjectId bacnetObject, BacnetPropertyIds property, out BacnetValue value)
+        public bool readMultiScalarValue(uint deviceId, IList<BacnetReadAccessSpecification> properties, out IList<BacnetReadAccessResult> values)
         {
             BacnetAddress adr = null;
-            IList<BacnetValue> values;
+            IList<BacnetReadAccessResult> responseValues;
+            values = null;      //기본값
 
             // BACnet 노드에서 주어진 deviceId에 해당하는 주소 찾기
             foreach (BacnetNode node in bacNodes)
@@ -293,7 +321,7 @@ namespace BacnetAgentDevice
                 }
             }
 
-            value = new BacnetValue(null);
+            responseValues = new List<BacnetReadAccessResult>();
 
             if (adr == null)
             {
@@ -303,20 +331,21 @@ namespace BacnetAgentDevice
 
             try
             {
+                
                 // 프로퍼티 값을 읽어오기
-                if (!client.ReadPropertyRequest(adr, bacnetObject, property, out values) || values.Count == 0)
+                if (!client.ReadPropertyMultipleRequest(adr, properties, out responseValues) || responseValues.Count == 0)
                 {
-                    Console.WriteLine($"Failed to read property {property} for device {deviceId}.");
+                    Console.WriteLine($"Failed to read property PresentValue for device {deviceId}.");
                     return false;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error reading property {property} for device {deviceId}: {ex}");
+                Console.WriteLine($"Error reading property PresentValue for device {deviceId}: {ex}");
                 return false;
             }
 
-            value = values[0];
+            values = responseValues;
             return true;
         }
 
