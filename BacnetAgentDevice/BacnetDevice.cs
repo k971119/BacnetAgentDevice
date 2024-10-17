@@ -113,7 +113,7 @@ namespace BacnetAgentDevice
 
             //가져올 속성값(Present Value)
             IList<BacnetPropertyReference> bacnetProperties = new List<BacnetPropertyReference>();
-            bacnetProperties.Add(new BacnetPropertyReference((uint)BacnetPropertyIds.PROP_PRESENT_VALUE, 0));
+            bacnetProperties.Add(new BacnetPropertyReference((uint)BacnetPropertyIds.PROP_PRESENT_VALUE, uint.MaxValue));
 
             //값을 받을 변수
             IList<BacnetReadAccessResult> resultValues = new List<BacnetReadAccessResult>();
@@ -191,7 +191,7 @@ namespace BacnetAgentDevice
                 {
                     foreach(BacnetReadAccessResult result in resultValues)
                     {
-                        responseValue += String.Format("{0},{1},13;", systemIdList.Dequeue(), result.values[0].value[0].ToString());
+                        responseValue += String.Format("{0},{1},13;", systemIdList.Dequeue(), result.values[0].value[0].Value.ToString());
                     }
                     //responseValue += String.Format("{0},{1},13;", systemId, bacnetValue.Value.ToString());
                 }
