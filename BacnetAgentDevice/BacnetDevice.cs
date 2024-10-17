@@ -191,7 +191,7 @@ namespace BacnetAgentDevice
                 {
                     foreach(BacnetReadAccessResult result in resultValues)
                     {
-                        responseValue += String.Format("{0},{1},13;", systemIdList.Dequeue(), result.values[0].value.ToString());
+                        responseValue += String.Format("{0},{1},13;", systemIdList.Dequeue(), result.values[0].value[0].ToString());
                     }
                     //responseValue += String.Format("{0},{1},13;", systemId, bacnetValue.Value.ToString());
                 }
