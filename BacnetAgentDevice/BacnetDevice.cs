@@ -25,6 +25,9 @@ namespace BacnetAgentDevice
         String localIp = Dns.GetHostEntry(Dns.GetHostName()).AddressList[0].ToString();
         int localPort = 0xBAC0;
 
+        //클라이언트 요청 다건중 한번만 처리하기 위한 변수
+        int index = 0;
+
         public override bool Init(int iDeviceID)
         {
             _Device = iDeviceID;
@@ -93,6 +96,8 @@ namespace BacnetAgentDevice
 
             return true;
         }
+
+        Dictionary<String, String> resultTemp = new Dictionary<string, string>();
 
         public override int SendData(int sendType, string cData, int DataSize)
         {
@@ -165,15 +170,32 @@ namespace BacnetAgentDevice
                     }
                     else
                     {
+                        if (index > 0)      //기존값을 강제로 삽입
+                        {
+                            if (resultTemp.ContainsKey(systemId))       //값이 있을경우 responseValue에 태워서 for문으로 돌아감 없을경우 지나쳐서 readScalarValue실행
+                            {
+                                String result;
+                                resultTemp.TryGetValue(systemId, out result);
+
+                                responseValue += String.Format("{0},{1},13;", systemId, result);
+
+                                continue;       //키값이 있었을 경우 reqd 스킵
+                            }
+                        }
+
                         if (readScalarValue(uint.Parse(deviceId), bacnetObjectId, BacnetPropertyIds.PROP_PRESENT_VALUE, out bacnetValue))
                         {
                             responseValue += String.Format("{0},{1},13;", systemId, bacnetValue.Value.ToString());
+                            resultTemp.Add(systemId, bacnetValue.Value.ToString());
                         }
                     }
 
                     Thread.Sleep(10);
                 }catch (Exception ex) { continue; }
             }
+
+            if (index >= 1) { index = 0; resultTemp.Clear(); }
+            else { index++; }
 
             base.ToReceive(_Device, 3, responseValue, systemList.Length);
 
